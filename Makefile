@@ -12,5 +12,5 @@ server.o: server.c
 	$(CC) $(CFLAGS) -c server.c
 # Cleaning old files before new make
 clean:
-	$(RM) $(TARGET) *.o *~ "#"* cacheSim*
+	$(RM) $(TARGET) *.o *~ "#"* ttftps*
 
