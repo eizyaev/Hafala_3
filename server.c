@@ -11,22 +11,25 @@
 
 #define BUFSIZE 516
 
-// ACK structure
-typedef struct _ACK{
+/* ACK Structure */
+typedef struct _ACK
+{
 	unsigned char a;
 	unsigned char b;
 	unsigned char c;
 	unsigned char d;
 } __attribute__((packed)) ACK;
 
-/* main function for tftp implementation
- * arg1 - socket
- * returns status for success, failure*/
-bool get_from_client(int fd);
-/* gets and returns its block number */
-int block_number(ACK ack);
-/* gets ack and increases its block number */
-void increase_ack(ACK* ack);
+/* Main function for TFTP implementation
+ * arg1 - socket number
+ * Returns status : success, failure */
+bool GetFromClient(int fd);
+
+/* Gets an ack packet & returns its block number */
+int BlockNumber(ACK ack);
+
+/* Gets an ack packet & increases its block number */
+void IncreaseAck(ACK* ack);
 
 int main(int argc, char **argv)
 {
@@ -38,11 +41,11 @@ int main(int argc, char **argv)
 
 	int fd;
 	int port = atoi(argv[1]);
-	struct sockaddr_in myaddr; // our address
+	struct sockaddr_in MyAddr; // Our address //
 
-	/* Creating new UDP socket:
+	/* Creating a new UDP socket:
 	* AF_INET - for ip
-	* SOCK_DGRAM - datagram service, connectionless comunication
+	* SOCK_DGRAM - datagram service, connectionless communication (by UDP)
 	* 0 - default value, UDP for SOCK_DGRAM */
 	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 	{
@@ -50,60 +53,61 @@ int main(int argc, char **argv)
 		exit(2);
 	}
 
-	/* bind socket to any valid ip address and specific port*/
-	memset((char *)&myaddr, 0, sizeof(myaddr));
-	myaddr.sin_family = AF_INET;
-	myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	myaddr.sin_port = htons(port);
+	/* Bind socket to any valid ip address and specific port */
+	memset((char *)&MyAddr, 0, sizeof(MyAddr));
+	MyAddr.sin_family = AF_INET;
+	MyAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	MyAddr.sin_port = htons(port);
 
-	if (bind(fd, (struct sockaddr *)&myaddr, sizeof(myaddr)) < 0)
+	if (bind(fd, (struct sockaddr *)&MyAddr, sizeof(MyAddr)) < 0)
 	{
 		fprintf(stderr, "bind failed");
 		exit(3);
 	}
 
-	// infinite loop for getting connecions
+	// Infinite loop for getting connections //
 	do
 	{
-		if (get_from_client(fd))
+		if (GetFromClient(fd))
 			printf("RECVOK\n");
 		else
 			printf("RECVFAIL\n");
 	}while(1);
 
-	close(fd); // close socket
+	close(fd); // Close socket //
+	
 	return 0;
 }
 
 
 
-/* main function for tftp implementation
- * arg1 - socket
- * returns status for success, failure*/
-bool get_from_client(int fd)
+/* Main function for TFTP implementation
+ * arg1 - socket number
+ * returns status : success, failure */
+bool GetFromClient(int fd)
 {
-	unsigned char buf[BUFSIZE]; // recieve buffer
-	struct sockaddr_in remaddr; // remote address
-	socklen_t addrlen = sizeof(remaddr); // length of addresses
-	int recvlen; // # bytes recieved
+	unsigned char buf[BUFSIZE];	// Receive buffer //
+	struct sockaddr_in RemAddr;	// Remote address //
+	socklen_t AddrLen = sizeof(RemAddr);	// Length of addresses //
+	int RecvLen;	// # Bytes recieved //
 	const int NUMBER_OF_FAILURES = 7;
-	int timeoutExpiredCount = 0;
-	char file[BUFSIZE] = ""; // file name
-	char mode[BUFSIZE] = ""; // mode
+	int TimeoutExpiredCount = 0;
+	char file[BUFSIZE] = "";	// File name //
+	char mode[BUFSIZE] = "";	// Mode //
 	int i = 0;
-	int lastWriteSize; // actual writing size
+	int LastWriteSize;	// Actual writing size //
 
-	// recieved first message, should be WRQ
-	recvlen = recvfrom(fd, buf, BUFSIZE, 0, (struct sockaddr *)&remaddr, &addrlen);
+	// Recieved first message, should be WRQ //
+	RecvLen = recvfrom(fd, buf, BUFSIZE, 0, (struct sockaddr *)&RemAddr, &AddrLen);
 
-	// not WRQ opcode
+	// Not WRQ opcode //
 	if (!(buf[0] == 0 && buf[1] == 2))
 	{
 		printf("FLOWERROR: not WRQ request\n");
 		return false;
 	}
 
-	// parsing WRQ
+	// Parsing WRQ //
 	strcpy(file, (char*)buf+2);
 	for (i = 2 ; i < BUFSIZE ; i++)
 	{
@@ -113,105 +117,104 @@ bool get_from_client(int fd)
 	strcpy(mode, (char*)buf+i+1);
 
 	printf("IN:WRQ, %s, %s\n", file, mode);
-	// creating file for copy
+	// Creating file for copy //
 	FILE *f;
 	f = fopen(file, "w");
 	if (f == NULL)
 	{
-		fprintf(stderr, "Error copying file\n");
+		fprintf(stderr, "Error opening file\n");
 		exit(4);
 	}
 
-
-	// variabels for select()
+	// Variabels for select() //
 	fd_set rfds;
 	struct timeval tv;
 	int retval;
 
-	ACK my_ack;
-	my_ack.a = 0;
-	my_ack.b = 4;
-	my_ack.c = 0;
-	my_ack.d = 0;
-	sendto(fd, &my_ack, 4, 0, (struct sockaddr *)&remaddr, addrlen);
-	printf("OUT:ACK, %d\n", block_number(my_ack));
+	ACK MyAck;
+	MyAck.a = 0;
+	MyAck.b = 4;
+	MyAck.c = 0;
+	MyAck.d = 0;
+	sendto(fd, &MyAck, 4, 0, (struct sockaddr *)&RemAddr, AddrLen);
+	printf("OUT:ACK, %d\n", BlockNumber(MyAck));
 	do
 	{
 		do
 		{
-			//Wait WAIT_FOR_PACKET_TIMEOUT
+			// Wait WAIT_FOR_PACKET_TIMEOUT //
 			FD_ZERO(&rfds);
 			FD_SET(fd, &rfds);
 			tv.tv_sec = 3;
 			tv.tv_usec = 0;
 			retval = select(fd + 1, &rfds, NULL, NULL, &tv);
 
-			if (retval)//if there was something at the socket
+			if (retval)	// If there was something at the socket //
 			{
-				recvlen = recvfrom(fd, buf, BUFSIZE, 0, (struct sockaddr *)&remaddr, &addrlen);
-				increase_ack(&my_ack);
+				RecvLen = recvfrom(fd, buf, BUFSIZE, 0, (struct sockaddr *)&RemAddr, &AddrLen);
+				IncreaseAck(&MyAck);
 				break;
 			}
-			if (retval < 0) //Time out expired while waiting for data
+			if (retval < 0)	// Timeout expired while waiting for data //
 			{
-				sendto(fd, &my_ack, 4, 0, (struct sockaddr *)&remaddr, addrlen);
+				sendto(fd, &MyAck, 4, 0, (struct sockaddr *)&RemAddr, AddrLen);
 				printf("FLOWERROR: time out expired for packet\n");
-				timeoutExpiredCount++;
+				TimeoutExpiredCount++;
 			}
-			if (timeoutExpiredCount >= NUMBER_OF_FAILURES)
+			if (TimeoutExpiredCount >= NUMBER_OF_FAILURES)
 			{
 				printf("FLOWERROR: timeout exceeded\n");
-				fclose(f); // close file
+				fclose(f);	// Close file //
 				return false;
 			}
-		}while (true); //Continue while some socket was ready
+		}while (true);	// Continue while some socket was ready //
 
-		// We got something else but DATA
+		// We got something else but DATA //
 		if (!(buf[0] == 0 && buf[1] == 3))
 		{
 			printf("FLOWERROR: packet is not DATA\n");
-			fclose(f); // close file
+			fclose(f);	// Close file //
 			return false;
 		}
-		// incorrect block number
-		if (!(buf[2] == my_ack.c && buf[3] == my_ack.d))
+		// Incorrect block number //
+		if (!(buf[2] == MyAck.c && buf[3] == MyAck.d))
 		{
 			printf("FLOWERROR: incorrect block number\n");
-			fclose(f); // close file
+			fclose(f);	// Close file //
 			return false;
 		}
+		
 		ACK tmp;
 		tmp.a = 0;
 		tmp.b = 0;
 		tmp.c = buf[2];
 		tmp.d = buf[3];
-		printf("IN:DATA, %d, %d\n", block_number(tmp), recvlen);
+		printf("IN:DATA, %d, %d\n", BlockNumber(tmp), RecvLen);
 
-		timeoutExpiredCount = 0;
+		TimeoutExpiredCount = 0;
 
-		if (recvlen != 4)
+		if (RecvLen != 4)
 		{
-			lastWriteSize = fwrite(buf+4 , 1 , recvlen-4 , f);
-			printf("WRITING: %d\n", lastWriteSize);
+			LastWriteSize = fwrite(buf+4 , 1 , RecvLen-4 , f);
+			printf("WRITING: %d\n", LastWriteSize);
 		}
 
-		sendto(fd, &my_ack, 4, 0, (struct sockaddr *)&remaddr, addrlen);
-		printf("OUT:ACK, %d\n", block_number(my_ack));
-		// Have blocks left to be read from client (not end of transmission)
-	}while (recvlen == 516);
+		sendto(fd, &MyAck, 4, 0, (struct sockaddr *)&RemAddr, AddrLen);
+		printf("OUT:ACK, %d\n", BlockNumber(MyAck));
+	}while (RecvLen == 516);	// Have blocks left to be read from client (not the end of transmission) //
 
-	fclose(f); // close file
+	fclose(f);	// Close file //
 	return true;
 }
 
-/* gets and returns its block number */
-int block_number(ACK ack)
+/* Gets an ack packet & returns its block number */
+int BlockNumber(ACK ack)
 {
 	return ack.c*256 + ack.d;
 }
 
-/* gets ack and increases its block number */
-void increase_ack(ACK* ack)
+/* Gets an ack packet & increases its block number */
+void IncreaseAck(ACK* ack)
 {
 	if (ack->d == 255)
 	{
