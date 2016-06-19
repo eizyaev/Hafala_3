@@ -149,17 +149,22 @@ bool GetFromClient(int fd)
 			tv.tv_usec = 0;
 			retval = select(fd + 1, &rfds, NULL, NULL, &tv);
 
-			if (retval)	// If there was something at the socket //
+			if (retval > 0)	// If there was something at the socket //
 			{
 				RecvLen = recvfrom(fd, buf, BUFSIZE, 0, (struct sockaddr *)&RemAddr, &AddrLen);
 				IncreaseAck(&MyAck);
 				break;
 			}
-			if (retval < 0)	// Timeout expired while waiting for data //
+			else if (retval == 0)	// Timeout expired while waiting for data //
 			{
 				sendto(fd, &MyAck, 4, 0, (struct sockaddr *)&RemAddr, AddrLen);
 				printf("FLOWERROR: time out expired for packet\n");
 				TimeoutExpiredCount++;
+			}
+			else
+			{
+				fprintf(stderr, "Error in select\n");
+				exit(5);
 			}
 			if (TimeoutExpiredCount >= NUMBER_OF_FAILURES)
 			{
