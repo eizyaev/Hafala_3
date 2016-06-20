@@ -75,7 +75,7 @@ int main(int argc, char **argv)
 	}while(1);
 
 	close(fd); // Close socket //
-	
+
 	return 0;
 }
 
@@ -98,10 +98,14 @@ bool GetFromClient(int fd)
 	int LastWriteSize;	// Actual writing size //
 
 	// Recieved first message, should be WRQ //
-	RecvLen = recvfrom(fd, buf, BUFSIZE, 0, (struct sockaddr *)&RemAddr, &AddrLen);
+	if ((RecvLen = recvfrom(fd, buf, BUFSIZE, 0, (struct sockaddr *)&RemAddr, &AddrLen)) == -1)
+	{
+		fprintf(stderr, "Error in srecvfrom\n");
+		exit(6);
+	}
 
 	// Not WRQ opcode //
-	if (!(buf[0] == 0 && buf[1] == 2))
+	if (RecvLen < 10 || !(buf[0] == 0 && buf[1] == 2))
 	{
 		printf("FLOWERROR: not WRQ request\n");
 		return false;
@@ -136,7 +140,12 @@ bool GetFromClient(int fd)
 	MyAck.b = 4;
 	MyAck.c = 0;
 	MyAck.d = 0;
-	sendto(fd, &MyAck, 4, 0, (struct sockaddr *)&RemAddr, AddrLen);
+	
+	if (sendto(fd, &MyAck, 4, 0, (struct sockaddr *)&RemAddr, AddrLen) == -1)
+	{
+		fprintf(stderr, "Error in sendto\n");
+		exit(7);
+	}
 	printf("OUT:ACK, %d\n", BlockNumber(MyAck));
 	do
 	{
@@ -151,13 +160,21 @@ bool GetFromClient(int fd)
 
 			if (retval > 0)	// If there was something at the socket //
 			{
-				RecvLen = recvfrom(fd, buf, BUFSIZE, 0, (struct sockaddr *)&RemAddr, &AddrLen);
+				if ((RecvLen = recvfrom(fd, buf, BUFSIZE, 0, (struct sockaddr *)&RemAddr, &AddrLen)) == -1)
+				{
+					fprintf(stderr, "Error in srecvfrom\n");
+					exit(6);
+				}
 				IncreaseAck(&MyAck);
 				break;
 			}
 			else if (retval == 0)	// Timeout expired while waiting for data //
 			{
-				sendto(fd, &MyAck, 4, 0, (struct sockaddr *)&RemAddr, AddrLen);
+				if (sendto(fd, &MyAck, 4, 0, (struct sockaddr *)&RemAddr, AddrLen) == -1)
+				{
+					fprintf(stderr, "Error in sendto\n");
+					exit(7);
+				}
 				printf("FLOWERROR: time out expired for packet\n");
 				TimeoutExpiredCount++;
 			}
@@ -175,7 +192,7 @@ bool GetFromClient(int fd)
 		}while (true);	// Continue while some socket was ready //
 
 		// We got something else but DATA //
-		if (!(buf[0] == 0 && buf[1] == 3))
+		if (RecvLen < 4 || !(buf[0] == 0 && buf[1] == 3))
 		{
 			printf("FLOWERROR: packet is not DATA\n");
 			fclose(f);	// Close file //
@@ -188,7 +205,7 @@ bool GetFromClient(int fd)
 			fclose(f);	// Close file //
 			return false;
 		}
-		
+
 		ACK tmp;
 		tmp.a = 0;
 		tmp.b = 0;
